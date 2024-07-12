@@ -21,6 +21,8 @@ class Chat:
     def __init__(self, core, idx:int):
         self.core = core
         self.idx = idx
+        self.current_idx = 0
+        
     def __len__(self):
         """returns the number of active messages"""
         return self.core.lenchat(self.idx)
@@ -36,11 +38,29 @@ class Chat:
             return Message(text, idx, role)
         return Message()
     
+    def history(self, pos:int|None=None, size:int|None=None)->list:
+        messages = []
+        for msg in self:
+            messages.append(msg)
+        if pos is None:
+            pos = len(messages)
+        if size is None:
+            size = len(messages)
+        return messages[max(0, pos-size):pos]
+    
+    def __iter__(self):
+        for idx in range(1, self.__len__()+1):
+            yield self[idx]
+    
     def __repr__(self):
         a = self.core.reprchat(self.idx)
         return f"Chat<view=tree>(\n-----------------TREE-----------------\n{a}-----------------****-----------------\n)"
     def __str__(self):
         return f"Chat<size={self.size()}; len={self.__len__()}>({self.core.strchat(self.idx)})"
+    
+
+    
+    
     def new_message(self, prompt, response):
         self.core.new_message(self.idx, prompt, response)
     def regenerate_last(self, response):
@@ -50,7 +70,7 @@ class Chat:
     def regenerate(self, pos:int, response:str):
         assert pos%2==0 and pos>0 and pos<=self.__len__()
         self.core.regenerate(self.idx, pos, response)
-    def edit(self, pos:str, prompt:int, response:str):
+    def edit(self, pos:int, prompt:int, response:str):
         assert pos%2==1 and pos>0 and pos<=self.__len__()
         self.core.edit(self.idx, pos, prompt, response)
     def modify(self, pos:int, text:str):
@@ -117,6 +137,9 @@ class DataBase:
     def __getitem__(self, idx:int)->Chat:
         assert idx >= 0 and idx < self.core.len()
         return Chat(self.core, idx)
+    def __iter__(self):
+        for idx in range(self.__len__()):
+            yield self[idx]
     def new_chat(self)->Chat:
         return self.core.new_chat()
     def size(self)->int:
