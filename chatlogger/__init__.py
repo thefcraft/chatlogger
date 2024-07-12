@@ -148,13 +148,17 @@ class DataBase:
         return f"DataBase(len={self.__len__()}, messages={self.size()})"
 
 class Memory:
-    def __init__(self, size:int = 10, system_prompt="SYSTEM: ", system_token="SYSTEM: ", user_token="USER: ", ai_token="AI: ", newline="\n"):
+    def __init__(self, size:int = 10, 
+                 system_prompt="You are an intelligent assistant. You always provide well-reasoned answers that are both correct and helpful.", 
+                 system_token="system", 
+                 user_token="user", 
+                 ai_token="assistant", newline="\n", separator=": "):
         """ The File Prompt will be in this format 
-            system_prompt + system_token + newline
-            user_token + prompt + newline
-            ai_token + response + newline
+            system_prompt + separator + system_token + newline
+            user_token + separator + prompt + newline
+            ai_token + separator + response + newline
             ... n
-            user_token + prompt + newline
+            user_token + separator + prompt + newline
             ai_token
         """
         self.size = size
@@ -162,8 +166,35 @@ class Memory:
         self.system_token = system_token
         self.user_token = user_token
         self.ai_token = ai_token
+        self.separtor = separator
         self.newline = newline
-    def __call__(self, chat:Chat, prompt:str|None=None, pos:int|None=None)->str:
+    def history(self, chat:Chat, prompt:str|None=None, pos:int|None=None)->list:
+        if pos is not None:
+            if pos%2==1:
+                assert prompt is None, "Prompt must be empty so i can use old prompt here"
+            else:
+                assert prompt is not None, "Prompt must be non empty"
+        else: 
+            assert prompt is not None
+        history = [
+            {"role": self.system_token, "content": self.system_prompt},
+        ]
+        for msg in chat.history(pos=pos, size=self.size):
+            if msg.is_response == RESPONSE:
+                history.append(
+                    {"role": self.ai_token, "content": msg.text},
+                )
+            else:
+                history.append(
+                    {"role": self.user_token, "content": msg.text},
+                )
+        if prompt is not None:
+            history.append(
+                {"role": self.user_token, "content": prompt},
+            )
+        return history
+        
+    def raw(self, chat:Chat, prompt:str|None=None, pos:int|None=None)->str:
         if pos is not None:
             if pos%2==1:
                 assert prompt is None, "Prompt must be empty so i can use old prompt here"
@@ -172,17 +203,16 @@ class Memory:
         else: 
             assert prompt is not None
             
-        text = f"{self.system_prompt}{self.system_token}{self.newline}"
+        text = f"{self.system_prompt}{self.separtor}{self.system_token}{self.newline}"
         for msg in chat.history(pos=pos, size=self.size):
             if msg.is_response == RESPONSE:
-                text += f"{self.ai_token}{msg.text}{self.newline}"
+                text += f"{self.ai_token}{self.separtor}{msg.text}{self.newline}"
             else:
-                text += f"{self.user_token}{msg.text}{self.newline}"
+                text += f"{self.user_token}{self.separtor}{msg.text}{self.newline}"
         if prompt is None:
-            prompt = chat[pos+1]
-            text += f"{self.ai_token}"
+            text += f"{self.ai_token}{self.separtor}"
         else:
-            text += f"{self.user_token}{prompt}{self.newline}{self.ai_token}"
+            text += f"{self.user_token}{self.separtor}{prompt}{self.newline}{self.ai_token}{self.separtor}"
         return text
 
 # if __name__ == '__main__':
