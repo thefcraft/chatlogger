@@ -147,6 +147,45 @@ class DataBase:
     def __repr__(self):
         return f"DataBase(len={self.__len__()}, messages={self.size()})"
 
+class Memory:
+    def __init__(self, chat: Chat, size:int = 10, system_prompt="SYSTEM: ", system_token="SYSTEM: ", user_token="USER: ", ai_token="AI: ", newline="\n"):
+        """ The File Prompt will be in this format 
+            system_prompt + system_token + newline
+            user_token + prompt + newline
+            ai_token + response + newline
+            ... n
+            user_token + prompt + newline
+            ai_token
+        """
+        self.chat = chat
+        self.size = size
+        self.system_prompt = system_prompt
+        self.system_token = system_token
+        self.user_token = user_token
+        self.ai_token = ai_token
+        self.newline = newline
+    def __call__(self, prompt:str|None=None, pos:int|None=None)->str:
+        if pos is not None:
+            if pos%2==1:
+                assert prompt is None, "Prompt must be empty so i can use old prompt here"
+            else:
+                assert prompt is not None, "Prompt must be non empty"
+        else: 
+            assert prompt is not None
+            
+        text = f"{self.system_prompt}{self.system_token}{self.newline}"
+        for msg in self.chat.history(pos=pos, size=self.size):
+            if msg.is_response == RESPONSE:
+                text += f"{self.ai_token}{msg.text}{self.newline}"
+            else:
+                text += f"{self.user_token}{msg.text}{self.newline}"
+        if prompt is None:
+            prompt = self.chat[pos+1]
+            text += f"{self.ai_token}"
+        else:
+            text += f"{self.user_token}{prompt}{self.newline}{self.ai_token}"
+        return text
+
 # if __name__ == '__main__':
 #     db = DataBase()
 #     # db.load(r"dataset.bin")
