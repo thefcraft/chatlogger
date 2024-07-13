@@ -1,0 +1,358 @@
+
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>LLM Chat Interface</title>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="/static/style.css">
+    </head>
+    <body>
+        <div class="chat-container">
+            <header class="header">
+                <span>LLM Chat Interface</span>
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </header>
+            <aside class="sidebar">
+                <div class="sidebar-buttons">
+                    <button class="sidebar-button" title="Profile">
+                        <i class="fas fa-user"></i>
+                    </button>
+                    <button class="sidebar-button" title="Settings">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="sidebar-button" title="New Chat" onclick="window.location.href='/'">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <ul class="chat-list">
+                    {% for uid, info, timestamp in chatList %}
+                        <a href="/c/{{uid}}">
+                            <li class="chat-item">{{info}}</li>    
+                        </a>
+                    {% endfor %}
+                </ul>
+            </aside>
+            <main class="chat-messages" id="messages">
+                {% for (depth, is_response, msg, curr, total) in messages %}
+                    {% if is_response %}
+                        <div class="message" data-depth="{{depth}}">
+                            <p>{{msg.replace("\n", "\n<br>")|safe}}</p>
+                            <div class="message-actions">
+                                <button class="action-button" title="Copy">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                <button class="action-button" title="Regenerate" onclick="regenerate({{depth}})">
+                                    <i class="fas fa-redo"></i> Regenerate
+                                </button>
+                                <button class="action-button" title="Like">
+                                    <i class="fas fa-thumbs-up"></i> Like
+                                </button>
+                                <button class="action-button" title="Dislike">
+                                    <i class="fas fa-thumbs-down"></i> Dislike
+                                </button>
+                                <button class="action-button" title="Previous version" onclick="prev({{depth}})">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="action-button" title="Next version" onclick="next({{depth}})">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                                <span class="version-info">Version {{curr}} of {{total}}</span>
+                            </div>
+                        </div>
+                    {% else %}
+                    
+                        <div class="message user-message" data-depth="{{depth}}">
+                            <p class="user-text">{{msg.replace("\n", "\n<br>")|safe}}</p>
+                            <textarea class="edit-textarea" style="display: none;">{{msg}}</textarea>
+                            <div class="message-actions">
+                                <button class="action-button edit-button" title="Edit prompt" onclick="toggleEdit(this)">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="action-button save-button" style="display: none;" title="Save changes" onclick="saveEdit(this)">
+                                    <i class="fas fa-save"></i> Save
+                                </button>
+                                <button class="action-button cancel-button" style="display: none;" title="Cancel edit" onclick="cancelEdit(this)">
+                                    <i class="fas fa-times"></i> Cancel
+                                </button>
+                                <button class="action-button" title="Previous version" onclick="prev({{depth}})">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="action-button" title="Next version" onclick="next({{depth}})">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                                <span class="version-info">Version {{curr}} of {{total}}</span>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </main>
+            <div class="input-area">
+                <textarea class="message-input" id="input" placeholder="Type your message..." onkeydown="on_enter(event, send)"></textarea>
+                <button class="send-button" onclick="send()">Send</button>
+            </div>
+        </div>
+        <script>
+            
+            function toggleTheme() {
+                document.body.classList.toggle('dark-theme');
+                const themeIcon = document.querySelector('.theme-toggle i');
+                themeIcon.classList.toggle('fa-moon');
+                themeIcon.classList.toggle('fa-sun');
+            }
+    
+            function update(data){
+                const requestOptions = {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(data),
+                };
+                fetch('/api/v1/', requestOptions)
+                  .then(response => {
+                    window.location.reload();
+                  });
+            }
+            function updateProgress(data){
+                const requestOptions = {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(data),
+                };
+                fetch('/api/llm/', requestOptions)
+                .then(response => {
+                    // Handle the response stream as it comes in
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+
+                    let msgs = document.getElementById('messages');
+                    msgs.innerHTML += `<div class="message">
+                            <p id="llm-stream"></p>
+                            <div class="message-actions">
+                                <button class="action-button" title="Copy">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                <button class="action-button" title="Regenerate">
+                                    <i class="fas fa-redo"></i> Regenerate
+                                </button>
+                                <button class="action-button" title="Like">
+                                    <i class="fas fa-thumbs-up"></i> Like
+                                </button>
+                                <button class="action-button" title="Dislike">
+                                    <i class="fas fa-thumbs-down"></i> Dislike
+                                </button>
+                                <button class="action-button" title="Previous version">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="action-button" title="Next version">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                                <span class="version-info">Version - of -</span>
+                            </div>
+                        </div>`;
+                    let llmstream = document.getElementById('llm-stream');
+                    function stream() {
+                        return reader.read().then(({ done, value }) => {
+                            if (done) {
+                                console.log('Stream complete');
+                                window.location.reload();
+                                return;
+                            }
+                        
+                            // Process the streamed chunk (assuming text here)
+                            const chunk = decoder.decode(value, { stream: true }).replace("\n", "<br>");
+                            console.log(chunk);
+                            llmstream.innerHTML+=chunk;
+                            msgs.scrollTo(0, msgs.scrollHeight);
+                            // Continue reading the stream
+                            return stream();
+                        });
+                    }
+                
+                    // Start streaming
+                    return stream();
+                })
+                .catch(error => {
+                    console.error('Error streaming data:', error);
+                });
+            }
+    
+            function next(depth){
+                const data = {
+                  next: true,
+                  depth: depth,
+                  chatidx: '{{chatidx}}'
+                };
+                update(data);
+            }
+    
+            function prev(depth){
+                const data = {
+                  prev: true,
+                  depth: depth,
+                  chatidx: '{{chatidx}}'
+                };
+                update(data);
+            }
+    
+            function regenerate(depth){
+                
+                const data = {
+                  regenerate: true,
+                  depth: depth,
+                  chatidx: '{{chatidx}}'
+                }
+
+                let msgs = document.getElementById('messages');
+                let mm = document.getElementsByClassName('message');
+                for (let index = 0; index < mm.length; index++) {
+                    let element = mm[index];
+                    let element_depth = parseInt(element.getAttribute('data-depth'));
+                    if (element_depth >= depth){
+                        element.style.display = 'none';
+                    }
+                }
+                updateProgress(data);
+            }
+    
+            function send() {
+                let inp = document.getElementById('input');
+                const data = {
+                    new_message: true,
+                    prompt: inp.value,
+                  chatidx: '{{chatidx}}'
+                };
+
+                let msgs = document.getElementById('messages');
+                msgs.innerHTML += `<div class="message user-message">
+                            <p class="user-text">${inp.value.replace('\n', '<br>')}</p>
+                            <textarea class="edit-textarea" style="display: none;"></textarea>
+                            <div class="message-actions">
+                                <button class="action-button edit-button" title="Edit prompt">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="action-button save-button" style="display: none;" title="Save changes">
+                                    <i class="fas fa-save"></i> Save
+                                </button>
+                                <button class="action-button cancel-button" style="display: none;" title="Cancel edit">
+                                    <i class="fas fa-times"></i> Cancel
+                                </button>
+                                <button class="action-button" title="Previous version">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="action-button" title="Next version">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                                <span class="version-info">Version - of -</span>
+                            </div>
+                        </div>`;
+                inp.value = "";
+                msgs.scrollTo(0, msgs.scrollHeight);
+                updateProgress(data);
+            }
+    
+            function on_enter(event, callback) {
+                if(!event.shiftKey){
+                    if (event.keyCode === 13) {
+                        event.preventDefault();
+                        callback();
+                    }
+                }
+            }
+    
+            function toggleEdit(button) {
+                const messageDiv = button.closest('.user-message');
+                const textP = messageDiv.querySelector('.user-text');
+                const textArea = messageDiv.querySelector('.edit-textarea');
+                const editButton = messageDiv.querySelector('.edit-button');
+                const saveButton = messageDiv.querySelector('.save-button');
+                const cancelButton = messageDiv.querySelector('.cancel-button');
+    
+                textP.style.display = 'none';
+                textArea.style.display = 'block';
+                editButton.style.display = 'none';
+                saveButton.style.display = 'inline-block';
+                cancelButton.style.display = 'inline-block';
+    
+                textArea.focus();
+            }
+    
+            function saveEdit(button) {
+                const messageDiv = button.closest('.user-message');
+                const textP = messageDiv.querySelector('.user-text');
+                const textArea = messageDiv.querySelector('.edit-textarea');
+                const editButton = messageDiv.querySelector('.edit-button');
+                const saveButton = messageDiv.querySelector('.save-button');
+                const cancelButton = messageDiv.querySelector('.cancel-button');
+                const versionInfo = messageDiv.querySelector('.version-info');
+                versionInfo.innerHTML = 'Version - of -';
+    
+                textP.textContent = textArea.value;
+                textP.style.display = 'block';
+                textArea.style.display = 'none';
+                editButton.style.display = 'inline-block';
+                saveButton.style.display = 'none';
+                cancelButton.style.display = 'none';
+    
+                // Here you would typically send the updated text to the server
+                // For now, we'll just log it to the console
+                let prompt = textArea.value
+
+                
+                let depth = parseInt(button.parentNode.parentNode.getAttribute('data-depth'));
+                
+                const data = {
+                  edit: true,
+                  depth: depth,
+                  prompt: prompt,
+                  chatidx: '{{chatidx}}'
+                }; 
+                let msgs = document.getElementById('messages');
+                let mm = document.getElementsByClassName('message');
+                for (let index = 0; index < mm.length; index++) {
+                    let element = mm[index];
+                    let element_depth = parseInt(element.getAttribute('data-depth'));
+                    if (element_depth > depth){
+                        element.style.display = 'none';
+                    }
+                }
+                updateProgress(data);
+            }
+    
+            function cancelEdit(button) {
+                const messageDiv = button.closest('.user-message');
+                const textP = messageDiv.querySelector('.user-text');
+                const textArea = messageDiv.querySelector('.edit-textarea');
+                const editButton = messageDiv.querySelector('.edit-button');
+                const saveButton = messageDiv.querySelector('.save-button');
+                const cancelButton = messageDiv.querySelector('.cancel-button');
+    
+                textArea.value = textP.textContent;
+                textP.style.display = 'block';
+                textArea.style.display = 'none';
+                editButton.style.display = 'inline-block';
+                saveButton.style.display = 'none';
+                cancelButton.style.display = 'none';
+            }
+    
+            onload = () => {
+                let msgs = document.getElementById('messages');
+                msgs.scrollTo(0, msgs.scrollHeight);
+                const darkThemeMq = window.matchMedia("(prefers-color-scheme: dark)");
+                if (darkThemeMq.matches) {
+                    // Theme set to dark.
+                    toggleTheme();
+                } else {
+                    // Theme set to light.
+                }
+            }
+        </script>
+    </body>
+    </html>

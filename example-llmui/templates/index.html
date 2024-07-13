@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Chat Interface</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/index.css">
+</head>
+<body>
+    <div class="chat-container">
+        <header class="header">
+            <span>LLM Chat Interface</span>
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <i class="fas fa-moon"></i>
+            </button>
+        </header>
+        <aside class="sidebar">
+            <div class="sidebar-buttons">
+                <button class="sidebar-button" title="Profile">
+                    <i class="fas fa-user"></i>
+                </button>
+                <button class="sidebar-button" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button class="sidebar-button" title="New Chat" onclick="window.location.href='/'">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+            <ul class="chat-list">
+                {% for uid, info, timestamp in chatList %}
+                    <a href="/c/{{uid}}">
+                        <li class="chat-item">{{info}}</li>    
+                    </a>
+                {% endfor %}
+            </ul>
+        </aside>
+        <main class="main-content" id="messages">
+            <div class="home-page">
+                <h1 class="welcome-message">Welcome to the LLM Chat Interface</h1>
+                <div class="prompt-suggestions">
+                    <div class="prompt-card" onclick="entre_suggest_prompt('Ask the AI to explain any complex topic in simple terms.')">
+                        <h3>Explain a Concept</h3>
+                        <p>Ask the AI to explain any complex topic in simple terms.</p>
+                    </div>
+                    <div class="prompt-card" onclick="entre_suggest_prompt('Get help with story ideas, character development, or plot twists.')">
+                        <h3>Creative Writing</h3>
+                        <p>Get help with story ideas, character development, or plot twists.</p>
+                    </div>
+                    <div class="prompt-card" onclick="entre_suggest_prompt('Ask for help with coding problems or explanations of programming concepts.')">
+                        <h3>Code Assistance</h3>
+                        <p>Ask for help with coding problems or explanations of programming concepts.</p>
+                    </div>
+                    <div class="prompt-card" onclick="entre_suggest_prompt('Translate phrases or get help with language learning.')">
+                        <h3>Language Translation</h3>
+                        <p>Translate phrases or get help with language learning.</p>
+                    </div>
+                    <div class="prompt-card" onclick="entre_suggest_prompt('Get insights on interpreting data or statistical concepts.')">
+                        <h3>Data Analysis</h3>
+                        <p>Get insights on interpreting data or statistical concepts.</p>
+                    </div>
+                    <div class="prompt-card" onclick="entre_suggest_prompt('Generate ideas for projects, business ventures, or problem-solving.')">
+                        <h3>Brainstorming</h3>
+                        <p>Generate ideas for projects, business ventures, or problem-solving.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <div class="input-area">
+            <textarea class="message-input" id="input" placeholder="Type your message or select a prompt suggestion..." onkeydown="on_enter(event, send)"></textarea>
+            <button class="send-button" onclick="send()">Send</button>
+        </div>
+    </div>
+    <script>
+        function entre_suggest_prompt(prompt){
+            let inp = document.getElementById('input');
+            inp.value = prompt;
+            send();
+        }
+        function updateProgress(data){
+                const requestOptions = {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(data),
+                };
+                fetch('/api/llm/', requestOptions)
+                .then(response => {
+                    // Handle the response stream as it comes in
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+
+                    let msgs = document.getElementById('messages');
+                    msgs.innerHTML += `<div class="message">
+                            <p id="llm-stream"></p>
+                            <div class="message-actions">
+                                <button class="action-button" title="Copy">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                <button class="action-button" title="Regenerate">
+                                    <i class="fas fa-redo"></i> Regenerate
+                                </button>
+                                <button class="action-button" title="Like">
+                                    <i class="fas fa-thumbs-up"></i> Like
+                                </button>
+                                <button class="action-button" title="Dislike">
+                                    <i class="fas fa-thumbs-down"></i> Dislike
+                                </button>
+                                <button class="action-button" title="Previous version">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="action-button" title="Next version">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                                <span class="version-info">Version - of -</span>
+                            </div>
+                        </div>`;
+                    let llmstream = document.getElementById('llm-stream');
+                    function stream() {
+                        return reader.read().then(({ done, value }) => {
+                            if (done) {
+                                console.log('Stream complete');
+                                window.location.href = `/c/${data['chatidx']}`;
+                                return;
+                            }
+                        
+                            // Process the streamed chunk (assuming text here)
+                            const chunk = decoder.decode(value, { stream: true }).replace("\n", "<br>");
+                            console.log(chunk);
+                            llmstream.innerHTML+=chunk;
+                            msgs.scrollTo(0, msgs.scrollHeight);
+                            // Continue reading the stream
+                            return stream();
+                        });
+                    }
+                
+                    // Start streaming
+                    return stream();
+                })
+                .catch(error => {
+                    console.error('Error streaming data:', error);
+                });
+            }
+
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark-theme');
+            const themeIcon = document.querySelector('.theme-toggle i');
+            themeIcon.classList.toggle('fa-moon');
+            themeIcon.classList.toggle('fa-sun');
+        }
+        function send() {
+            let inp = document.getElementById('input');
+            const data = {
+              new_chat: true,
+              prompt: inp.value
+            };
+            let msgs = document.getElementById('messages');
+            msgs.removeAttribute('class');
+            msgs.setAttribute('class', 'chat-messages');
+            msgs.innerHTML = `<div class="message user-message">
+                            <p class="user-text">${inp.value.replace('\n', '<br>')}</p>
+                            <textarea class="edit-textarea" style="display: none;"></textarea>
+                            <div class="message-actions">
+                                <button class="action-button edit-button" title="Edit prompt">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="action-button save-button" style="display: none;" title="Save changes">
+                                    <i class="fas fa-save"></i> Save
+                                </button>
+                                <button class="action-button cancel-button" style="display: none;" title="Cancel edit">
+                                    <i class="fas fa-times"></i> Cancel
+                                </button>
+                                <button class="action-button" title="Previous version">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="action-button" title="Next version">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                                <span class="version-info">Version - of -</span>
+                            </div>
+                        </div>`;
+            
+            const requestOptions = {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(data),
+            };
+            fetch('/api/v1/', requestOptions)
+              .then(response => {
+                return response.json()
+              }).then(data => {
+                id = data['ID'];
+                let dd = {
+                    new_message: true,
+                    prompt: inp.value,
+                    chatidx: id
+                };
+                inp.value = "";
+                updateProgress(dd);
+                
+              });
+        }
+        function on_enter(event, callback) {
+            if(!event.shiftKey){
+                if (event.keyCode === 13) {
+                    event.preventDefault();
+                    callback();
+                }
+            }
+        }
+        onload = () => {
+            const darkThemeMq = window.matchMedia("(prefers-color-scheme: dark)");
+                if (darkThemeMq.matches) {
+                    // Theme set to dark.
+                    toggleTheme();
+                } else {
+                    // Theme set to light.
+                }
+        }
+    </script>
+</body>
+</html>
