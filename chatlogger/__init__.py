@@ -1,4 +1,5 @@
 from chatlogger_core import Core
+import os
 
 PROMPT = 0
 RESPONSE = 1
@@ -119,14 +120,24 @@ class Chat:
         assert self.curr_idx(pos) < self.curr_neighbours(pos)-1
         self.core.nextchat(self.idx, pos)
 class DataBase:
-    def __init__(self, path=None):
+    def __init__(self, path=None, save_on_exit=True):
         self.core = Core()
+        if not os.path.exists(path):
+            with open(path, 'w'): ...
+            self.save(path)
+        else:
+            self.load(path)
+        self.save_on_exit = save_on_exit
         self.path = path
     @classmethod
     def new(cls, path:str):
         return cls(path)
+    def __del__(self):
+        """ auto saving the db """
+        if self.save_on_exit and self.path is not None:
+            self.commit()
     def commit(self):
-        assert self.path is not None
+        assert self.path is not None, "please set path while making database., db = DataBase.new(path)"
         self.save(self.path)
     def load(self, path:str):
         self.core.load(path)

@@ -3,7 +3,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 setup(
     name="chatlogger-db",
-    version="0.1.4",
+    version="0.1.5",
     author="ThefCraft",
     author_email="sisodiyalaksh@gmail.com",
     url="https://github.com/thefcraft/chatlogger",
