@@ -3,7 +3,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 setup(
     name="chatlogger-db",
-    version="0.1.5",
+    version="0.1.6",
     author="ThefCraft",
     author_email="sisodiyalaksh@gmail.com",
     url="https://github.com/thefcraft/chatlogger",
@@ -16,5 +16,5 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    install_requires=["chatlogger-core"]
+    install_requires=["chatlogger-core", "uuid"]
 )

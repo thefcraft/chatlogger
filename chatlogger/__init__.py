@@ -1,5 +1,7 @@
 from chatlogger_core import Core
-import os
+import json, os
+from datetime import datetime
+from uuid import UUID, uuid4 as uuid
 
 PROMPT = 0
 RESPONSE = 1
@@ -120,22 +122,18 @@ class Chat:
         assert self.curr_idx(pos) < self.curr_neighbours(pos)-1
         self.core.nextchat(self.idx, pos)
 class DataBase:
-    def __init__(self, path=None, save_on_exit=True):
+    def __init__(self, path=None):
         self.core = Core()
-        if not os.path.exists(path):
-            with open(path, 'w'): ...
-            self.save(path)
-        else:
-            self.load(path)
-        self.save_on_exit = save_on_exit
+        if path is not None :
+            if not os.path.exists(path):
+                with open(path, 'w'): ...
+                self.save(path)
+            else:
+                self.load(path)
         self.path = path
     @classmethod
     def new(cls, path:str):
         return cls(path)
-    def __del__(self):
-        """ auto saving the db """
-        if self.save_on_exit and self.path is not None:
-            self.commit()
     def commit(self):
         assert self.path is not None, "please set path while making database., db = DataBase.new(path)"
         self.save(self.path)
@@ -151,7 +149,7 @@ class DataBase:
     def __iter__(self):
         for idx in range(self.__len__()):
             yield self[idx]
-    def new_chat(self)->Chat:
+    def new_chat(self)->int:
         return self.core.new_chat()
     def size(self)->int:
         return self.core.size()
@@ -225,6 +223,79 @@ class Memory:
         else:
             text += f"{self.user_token}{self.separtor}{prompt}{self.newline}{self.ai_token}{self.separtor}"
         return text
+
+class User:
+    def __init__(self, userid, table, db:DataBase):
+        self.userid = userid
+        self.username = table[userid]['username']
+        self.table = table
+        self.db = db
+    def chats(self):
+        return [
+            (i, self.db[j['idx']], j['info'], j['time']) for i,j in self.table[self.userid]['chats'].items()
+        ]
+    def new_chat(self, prompt_info:str)->UUID:
+        idx = self.db.new_chat()
+        uid = uuid()
+        self.table[self.userid]["chats"].update({
+            str(uid) : {
+            "idx": idx, 
+            "time": datetime.now().isoformat(),
+            "info": prompt_info
+        }})
+        return uid
+    def __getitem__(self, uid:UUID|str):
+        elem = self.table[self.userid]['chats'].get(str(uid), None)
+        if elem is None: return elem
+        return self.db[elem['idx']], elem['info'], elem['time']
+    def __iter__(self):
+        for i,j in self.table[self.userid]['chats'].items():
+            yield (i, self.db[j['idx']], j['info'], j['time'])
+    def __len__(self):
+        return len(self.table[self.userid]['chats'])
+    def __repr__(self) -> str:
+        return f'User<{self.userid}; len={self.__len__()}>({self.username})'
+    
+class UserTable:
+    def __init__(self, db:DataBase, path=None):
+        self.path = path
+        self.db = db
+        self.table = {
+            # unique userid => {username: name, chats: {(chat id 1), chat id 2, ...}}
+        }
+        if path is not None :
+            if not os.path.exists(path): self.save(path)
+            else: 
+                try: self.load(path)
+                except json.decoder.JSONDecodeError: self.save(path)
+    def commit(self):
+        assert self.path is not None
+        self.save(self.path)
+    def __getitem__(self, userid)->User:
+        elem = self.table.get(userid, None)
+        if elem is None: return elem
+        return User(userid, self.table, self.db)
+    
+    def new_user(self, userid, username):
+        data = self.table.get(userid, None)
+        if data is None:
+            self.table.update({
+                userid: {
+                    "username": username,
+                    "chats": {
+                        
+                    }
+                }
+            })
+    
+    def save(self, path):
+        with open(path, 'w') as f:
+            json.dump(self.table, f)
+    def load(self, path):
+        with open(path, 'r') as f:
+            self.table = json.load(f)
+    def __repr__(self) -> str:
+        return self.table.__repr__()
 
 # if __name__ == '__main__':
 #     db = DataBase()
