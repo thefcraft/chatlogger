@@ -46,6 +46,16 @@ db.commit()
 user_table.commit()
 ```
 
+## Demo Web Interface
+
+[example-llmui](https://github.com/thefcraft/chatlogger/tree/master/example-llmui) includes a Flask-based web interface for interacting with chats. To run the web interface:
+
+`python app.py`
+
+![Web Interface Screenshot](/example-llmui/img.png)
+
+
+
 ## Core Components
 
 ### DataBase
@@ -63,15 +73,6 @@ The `Memory` class handles the formatting of chat history for use with language 
 ### UserTable
 
 The `UserTable` class manages user data and their associated chats.
-
-## Demo Web Interface
-
-[example-llmui](https://github.com/thefcraft/chatlogger/tree/master/example-llmui) includes a Flask-based web interface for interacting with chats. To run the web interface:
-
-`python app.py`
-
-![Web Interface Screenshot](/example-llmui/img.png)
-
 
 ## Contributing
 
